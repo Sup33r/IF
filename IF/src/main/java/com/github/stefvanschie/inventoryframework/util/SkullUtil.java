@@ -2,16 +2,14 @@ package com.github.stefvanschie.inventoryframework.util;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Base64;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -39,41 +37,36 @@ public final class SkullUtil {
     @NotNull
     public static ItemStack getSkull(@NotNull String id) {
         ItemStack item = new ItemStack(Material.PLAYER_HEAD);
-        ItemMeta itemMeta = Objects.requireNonNull(item.getItemMeta());
+        SkullMeta itemMeta = (SkullMeta) item.getItemMeta();
+        assert itemMeta != null;
         setSkull(itemMeta, id);
         item.setItemMeta(itemMeta);
         return item;
     }
 
     /**
-     * Sets the skull of an existing {@link ItemMeta} from the specified id.
+     * Sets the skull of an existing {@link SkullMeta} from the specified id.
      * The id is the value from the textures.minecraft.net website after the last '/' character.
      *
      * @param meta the meta to change
      * @param id the skull id
      */
-    public static void setSkull(@NotNull ItemMeta meta, @NotNull String id) {
-        GameProfile profile = new GameProfile(UUID.randomUUID(), "");
-        byte[] encodedData = Base64.getEncoder().encode(String.format("{textures:{SKIN:{url:\"%s\"}}}",
-            "http://textures.minecraft.net/texture/" + id).getBytes());
-        profile.getProperties().put("textures", new Property("textures", new String(encodedData)));
-        String itemDisplayName = meta.getDisplayName();
+    public static void setSkull(@NotNull SkullMeta meta, @NotNull String id) {
+        UUID uuid = UUID.randomUUID();
+        String textureUrl = "http://textures.minecraft.net/texture/" + id;
+        String encodedData = Base64.getEncoder().encodeToString(String.format("{textures:{SKIN:{url:\"%s\"}}}", textureUrl).getBytes());
 
+        // Create a GameProfile and set the texture property
+        GameProfile profile = new GameProfile(uuid, null);
+        profile.getProperties().put("textures", new Property("textures", encodedData));
+
+        // Use reflection to set the GameProfile on the SkullMeta
         try {
             Field profileField = meta.getClass().getDeclaredField("profile");
             profileField.setAccessible(true);
             profileField.set(meta, profile);
-
-            meta.setDisplayName(itemDisplayName);
-
-            // Sets serializedProfile field on meta
-            // If it does throw NoSuchMethodException this stops, and meta is correct.
-            // Else it has profile and will set the field.
-            Method setProfile = meta.getClass().getDeclaredMethod("setProfile", GameProfile.class);
-            setProfile.setAccessible(true);
-            setProfile.invoke(meta, profile);
-        } catch (NoSuchFieldException | SecurityException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException ignored) {}
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
     }
 }
